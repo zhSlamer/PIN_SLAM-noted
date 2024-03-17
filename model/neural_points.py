@@ -27,7 +27,7 @@ class NeuralPoints(nn.Module):
 
         # self.point_level_num = config.point_level_num
 
-        self.geo_feature_dim = config.feature_dim
+        self.geo_feature_dim = config.feature_dim   # 几何特征
         self.geo_feature_std = config.feature_std
 
         self.color_feature_dim = config.feature_dim
@@ -73,15 +73,22 @@ class NeuralPoints(nn.Module):
         self.buffer_pt_index = torch.full((self.buffer_size,), -1, dtype=self.idx_dtype, device=self.device)
         
         # TODO: add the second level for recording known and unknown space
+        # 神经点位置 x世界系W
         self.neural_points = torch.empty((0, 3), dtype=self.dtype, device=self.device)
+        # 神经点代表自身坐标系方向的四元数
         self.point_orientations = torch.empty((0, 4), dtype=self.dtype, device=self.device) # as quaternion
+        # 可优化的潜在特征向量，维数8；代表局部几何图形
         self.geo_features = torch.empty((1, self.geo_feature_dim), dtype=self.dtype, device=self.device)
+        # rgb
         if self.config.color_on:
             self.color_features = torch.empty((1, self.color_feature_dim), dtype=self.dtype, device=self.device)
         else:
             self.color_features = None
+        # 神经点创建时间
         self.point_ts_create = torch.empty((0), device=self.device, dtype=torch.long) # create ts
+        # 更新时间
         self.point_ts_update = torch.empty((0), device=self.device, dtype=torch.long) # last update ts
+        # 稳定性μ
         self.point_certainties = torch.empty((0), dtype=self.dtype, device=self.device)
 
         # the local map
