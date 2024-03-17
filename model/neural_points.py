@@ -531,7 +531,7 @@ class NeuralPoints(nn.Module):
 
         return query_points_certainty
         
-    
+    # self.geo_mlp.sdf(geo_feature) 通过此函数获得特征数据，预测sdf
     def query_feature(self, query_points: torch.Tensor, query_ts: torch.Tensor = None,
                       training_mode: bool = True, query_locally: bool = True,
                       query_geo_feature: bool = True, query_color_feature: bool = False): 
