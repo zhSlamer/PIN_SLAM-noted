@@ -462,7 +462,10 @@ class NeuralPoints(nn.Module):
         # print(self.neighbor_K)
 
         self.max_valid_dist2 = 3*((num_nei_cells+1)*self.resolution)**2
-
+    """
+    半径邻域搜索，用于寻找给定点周围的邻近点
+    
+    """"
     def radius_neighborhood_search(self, points: torch.Tensor, time_filtering: bool = False):
                                         
         T0 = get_time()
@@ -532,6 +535,15 @@ class NeuralPoints(nn.Module):
         return query_points_certainty
         
     # self.geo_mlp.sdf(geo_feature) 通过此函数获得特征数据，预测sdf
+    """
+    输入当前帧点云, 输出每个点的几何特征、颜色特征、权重向量、邻居计数、查询确定性
+    几何特征 输入 MLP 输出 sdf值
+
+    输入：
+    query_points: 要查询特征的点
+    query_ts: 包含查询点的时间戳
+    query_locally: 是否在局部范围内进行特征查询
+    """
     def query_feature(self, query_points: torch.Tensor, query_ts: torch.Tensor = None,
                       training_mode: bool = True, query_locally: bool = True,
                       query_geo_feature: bool = True, query_color_feature: bool = False): 
@@ -544,11 +556,11 @@ class NeuralPoints(nn.Module):
         geo_features_vector = None
         color_features_vector = None
 
-        nn_k = self.config.query_nn_k
+        nn_k = self.config.query_nn_k  # 查询点的k个最近神经点 nn_k = 6 or 8
 
         T0 = get_time()
 
-        # the slow part
+        # the slow part  # NOTE: need to use fast search such as kd-tree 
         dists2, idx = self.radius_neighborhood_search(query_points,
                                                       time_filtering=self.temporal_local_map_on and query_locally)
         
