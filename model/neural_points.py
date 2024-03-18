@@ -45,10 +45,10 @@ class NeuralPoints(nn.Module):
         self.device = config.device
         self.dtype = config.dtype
         self.idx_dtype = torch.int64 # torch.int64/32 does not have much speed difference
-        
-        self.resolution = config.voxel_size_m
+        #  # we use the voxel hashing structure to maintain the neural points, the voxel size is set as this value
+        self.resolution = config.voxel_size_m  # self.vox_down_m*5.0
 
-        self.buffer_size = config.buffer_size
+        self.buffer_size = config.buffer_size  # hash 储存点的数量
 
         self.temporal_local_map_on = True
         self.local_map_radius = self.config.local_map_radius
@@ -252,6 +252,7 @@ class NeuralPoints(nn.Module):
         cur_pt_idx[update_mask] = torch.arange(new_point_count, dtype=self.idx_dtype, device=self.device) + cur_pt_count
         
         self.buffer_pt_index[hash] = cur_pt_idx
+        # dim=0对行进行拼接
         self.neural_points = torch.cat((self.neural_points, added_pt), 0)
 
         added_orientations = [[1, 0, 0, 0]] * new_point_count
@@ -464,25 +465,26 @@ class NeuralPoints(nn.Module):
         self.max_valid_dist2 = 3*((num_nei_cells+1)*self.resolution)**2
     """
     半径邻域搜索，用于寻找给定点周围的邻近点
-    
+
     """"
     def radius_neighborhood_search(self, points: torch.Tensor, time_filtering: bool = False):
                                         
         T0 = get_time()
+        # 获取当前的分辨率和缓冲区大小 vox*5.0 体素哈希大小， 缓冲区大小
         cur_resolution = self.resolution
         cur_buffer_size = int(self.buffer_size)
-
+        # 将给定的点坐标除以当前的分辨率并向下取整，然后转换为另一个空间，通常是网格空间，以便更有效地进行搜索。
         grid_coords = (points / cur_resolution).floor().to(self.primes) # [N,3]
-        
+        # 计算每个点周围的邻近单元格的坐标。这里使用了一个预定义的偏移量 self.neighbor_dx，它包含了相对于每个点的邻近单元格的偏移。
         neighbord_cells = grid_coords[..., None, :] + self.neighbor_dx # [N,K,3] # int64
 
         T1 = get_time()
-    
+        # 计算每个邻近单元格的哈希值，以便将其映射到缓冲区的索引。这里使用了哈希函数将邻近单元格的坐标映射到一个缓冲区索引
         # hash = (neighbord_cells * self.primes).sum(-1) % cur_buffer_size  # [N,K] # no negative number
         hash = torch.fmod((neighbord_cells * self.primes).sum(-1), cur_buffer_size) # [N,K] # with negative number (but actually the same)
 
         T12 = get_time()
-
+        # 使用哈希值从缓冲区中获取相应的邻近点的索引。这个索引指向了实际的神经点集合。
         neighb_idx = self.buffer_pt_index[hash]
 
         T2 = get_time()
@@ -498,7 +500,7 @@ class NeuralPoints(nn.Module):
             neighb_idx[~local_t_window_mask] = -1 
 
         T3 = get_time()
-
+        #  获取邻近神经点的坐标，并计算每个邻近点与查询点之间的偏移向量。
         neighb_pts = self.neural_points[neighb_idx]
         neighb_pts_sub = neighb_pts - points.view(-1, 1, 3) # [N,K,3]
 
@@ -550,7 +552,7 @@ class NeuralPoints(nn.Module):
         
         if not query_geo_feature and not query_color_feature:
             sys.exit("you need to at least query one kind of feature")
-        
+        # 查询点数量
         batch_size = query_points.shape[0]
         
         geo_features_vector = None
@@ -560,7 +562,8 @@ class NeuralPoints(nn.Module):
 
         T0 = get_time()
 
-        # the slow part  # NOTE: need to use fast search such as kd-tree 
+        # the slow part  # NOTE: need to use fast search such as ikd-tree
+        # 查询每个点的K个邻近神经点，获取[N, K]每个点对应 K个神经点的距离 + K个神经点的编号 
         dists2, idx = self.radius_neighborhood_search(query_points,
                                                       time_filtering=self.temporal_local_map_on and query_locally)
         
@@ -570,6 +573,7 @@ class NeuralPoints(nn.Module):
         T10 = get_time()
 
         # print("K=", idx.shape[-1]) # K
+        # 如果是局部查询，通过 global2local 映射将全局索引转换为局部索引
         if query_locally:
             idx = self.global2local[idx] # [N, K] # get the local idx using the global2local mapping
         
@@ -578,6 +582,7 @@ class NeuralPoints(nn.Module):
         T1 = get_time()
         
         dists2[idx==-1] = 9e3 # invalid, set to large distance
+        # 根据距离对邻近的神经点进行排序
         sorted_dist2, sorted_neigh_idx = torch.sort(dists2, dim=1) # sort according to distance
         sorted_idx = idx.gather(1, sorted_neigh_idx)
         dists2 = sorted_dist2[:,:nn_k] # only take the knn
@@ -611,6 +616,7 @@ class NeuralPoints(nn.Module):
 
         N, K = valid_mask.shape # K = nn_k here
 
+        # 获取相应的确定性、邻居向量和四元数
         if query_locally:
             certainty = self.local_point_certainties[idx] # [N, K]
             neighb_vector = query_points.view(-1, 1, 3) - self.local_neural_points[idx] # [N, K, 3]
@@ -629,21 +635,26 @@ class NeuralPoints(nn.Module):
         if self.config.pos_encoding_band > 0:
             neighb_vector = self.position_encoder_geo(neighb_vector) # [N, K, P]
 
+        # 拼接 几何特征 + 距离向量  N个查询点，K个最近邻编号，FP输入特征
         if query_geo_feature:
             geo_features_vector = torch.cat((geo_features, neighb_vector), dim=2) # [N, K, F+P]
         if query_color_feature and self.color_features is not None:
             color_features_vector = torch.cat((color_features, neighb_vector), dim=2) # [N, K, F+P]
 
+        # 定义一个微小的值，以避免除以零导致的 NaN 错误
         eps = 1e-15 # avoid nan (dividing by 0)
-        
+
+        # 计算每个邻居点对查询点的权重，采用逆距离权重计算方法。
         weight_vector = 1. / (dists2 + eps) # [N, K] # Inverse distance weighting (IDW), distance square # [best, used]
         # weight_vector = 1. / torch.sqrt(dists2 + eps) # [N, K] # Inverse distance weighting (IDW), distance
         # weight_vector = 1. / (torch.sqrt(dists2 + eps))**3 # cubic distance [a bit worse than dist square]
         
+        # 将无效的邻居点的权重设置为零，并将那些没有邻居的查询点的权重设置为 eps，以避免归一化时出现 NaN
         weight_vector[~valid_mask] = 0. # pad for invalid voxels
         weight_vector[nn_counts == 0] = eps # all 0 would cause NaN during normalization
         
         # apply the normalization of weight 
+        # 对权重进行归一化，确保每个查询点的所有邻居点的权重之和为1
         weight_row_sums = torch.sum(weight_vector, dim=1).unsqueeze(1)
         weight_vector = torch.div(weight_vector, weight_row_sums) # [N, K] # normalize the weight, to make the sum as 1
 
@@ -651,6 +662,7 @@ class NeuralPoints(nn.Module):
         weight_vector[~valid_mask] = 0. # invalid has zero weight
 
         with torch.no_grad():
+            # 在训练模式下，根据权重累积每个神经点的确定性，并更新最后更新时间戳。
             # Certainty accumulation for each neural point according to the weight 
             # Use scatter_add_ to accumulate the values for each index
             if training_mode: # only do it during the training mode
@@ -675,7 +687,7 @@ class NeuralPoints(nn.Module):
                 queried_certainty = torch.sum(certainty * weight_vector, dim=1)
         
         weight_vector = weight_vector.unsqueeze(-1)  # [N, K, 1]
-
+        # 对特征向量进行加权求和，以获得每个查询点的最终特征向量
         if self.config.weighted_first:
             if query_geo_feature:
                 geo_features_vector = torch.sum(geo_features_vector * weight_vector, dim=1) # [N, F+P]
