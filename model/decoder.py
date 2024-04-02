@@ -19,7 +19,7 @@ class Decoder(nn.Module):
         super().__init__()
     
         self.out_dim = out_dim
-
+        # 加入偏置项
         bias_on = config.mlp_bias_on
 
         self.use_leaky_relu = False
@@ -28,15 +28,16 @@ class Decoder(nn.Module):
         # pos_encoding_base: int = 2
         self.num_bands = config.pos_encoding_band
         self.dimensionality = config.pos_input_dim
-
+        # 对输入的位置维度编码
         if config.use_gaussian_pe:
             position_dim = config.pos_input_dim + 2 * config.pos_encoding_band
         else:
             position_dim = config.pos_input_dim * (2 * config.pos_encoding_band + 1)
-            
+        
+        # 潜在特征向量
         feature_dim = config.feature_dim
         input_layer_count = feature_dim + position_dim  # 8 + 3
-        
+        # 时间输入维度
         if is_time_conditioned:
             input_layer_count += 1
 

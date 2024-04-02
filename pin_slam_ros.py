@@ -59,6 +59,7 @@ class PINSLAMer:
         self.ts_field_name = ts_field_name
         
         # initialize the mlp decoder 用于预测p处的sdf值
+        # Decoder MLP网络 输入层 8+3; 隐藏层 2*64; 输出层 1
         self.geo_mlp = Decoder(self.config, self.config.geo_mlp_hidden_dim, self.config.geo_mlp_level, 1)
         self.sem_mlp = Decoder(self.config, self.config.sem_mlp_hidden_dim, self.config.sem_mlp_level, self.config.sem_class_count + 1) if self.config.semantic_on else None
         self.color_mlp = Decoder(self.config, self.config.color_mlp_hidden_dim, self.config.color_mlp_level, self.config.color_channel) if self.config.color_on else None
@@ -187,7 +188,8 @@ class PINSLAMer:
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
         if not self.mapper.lose_track and not self.dataset.stop_status:
-            self.mapper.process_frame(self.dataset.cur_point_cloud_torch, self.dataset.cur_sem_labels_torch,
+            self.mapper.
+            (self.dataset.cur_point_cloud_torch, self.dataset.cur_sem_labels_torch,
                                       self.dataset.cur_pose_torch, self.dataset.processed_frame)
         else: # lose track, still need to set back the local map
             self.neural_points.reset_local_map(self.dataset.cur_pose_torch[:3,3], None, self.dataset.processed_frame)
