@@ -35,14 +35,15 @@ from utils.config import Config
 # setup this run
 def setup_experiment(config: Config, argv = None, debug_mode: bool = False): 
 
+    # 设置模块环境变量名称和环境变量值
     os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config.gpu_id)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  # begining timestamp
     
     run_name = config.name + "_" + ts  # modified to a name that is easier to index
-        
+    # 设置文件路径 + 文件名 创建文件
     run_path = os.path.join(config.output_root, run_name)
-
+    # 用来创建多层目录（单层请用os.mkdir)
     if not debug_mode:
         access = 0o755
         os.makedirs(run_path, access, exist_ok=True)
@@ -189,7 +190,7 @@ def freeze_model(model: nn.Module):
         for param in child.parameters():
             param.requires_grad = False
 
-
+# 模型精度 和 预测loss 相关 
 def unfreeze_model(model: nn.Module):
     for child in model.children():
         for param in child.parameters():
@@ -685,7 +686,8 @@ def plot_timing_detail(time_table: np.ndarray, saving_path:str, with_loop=False)
     plt.savefig(saving_path, dpi=500)
     # plt.show()
 
-
+# 体素哈希
+# 将三维空间划分为固定尺寸网格，每个网格索引以整数形式存储 
 # voxel hashing implementation with pytorch (by Louis Wiesmann)
 class VoxelHasherIndex(nn.Module):
     def __init__(self, points: torch.Tensor, grid_resolution: float=1.0, buffer_size: int=100000000, random: bool=False) -> None:

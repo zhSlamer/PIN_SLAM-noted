@@ -48,7 +48,7 @@ def run_pin_slam():
 
     run_path = setup_experiment(config, sys.argv)
     
-    # initialize the mlp decoder
+    # initialize the mlp decoder  不同属性设计多个MLP预测
     geo_mlp = Decoder(config, config.geo_mlp_hidden_dim, config.geo_mlp_level, 1)
     sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1) if config.semantic_on else None
     color_mlp = Decoder(config, config.color_mlp_hidden_dim, config.color_mlp_level, config.color_channel) if config.color_on else None

@@ -7,6 +7,7 @@ import yaml
 import os
 import torch
 
+# 参数配置类 ：1 初始化默认变量 2 load(config_path) 重新加载参数
 class Config:
     def __init__(self):
 

@@ -67,7 +67,8 @@ class PINSLAMer:
         # initialize the feature octree
         self.neural_points = NeuralPoints(self.config)
 
-        # Load the decoder model
+        # Load the decoder model 载入模型
+        # 载入的是已经训练好的浅层MLP模型
         if self.config.load_model: # not used
             load_decoder(self.config, self.geo_mlp, self.sem_mlp, self.color_mlp)
 
@@ -188,8 +189,7 @@ class PINSLAMer:
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
         if not self.mapper.lose_track and not self.dataset.stop_status:
-            self.mapper.
-            (self.dataset.cur_point_cloud_torch, self.dataset.cur_sem_labels_torch,
+            self.mapper.process_frame(self.dataset.cur_point_cloud_torch, self.dataset.cur_sem_labels_torch,
                                       self.dataset.cur_pose_torch, self.dataset.processed_frame)
         else: # lose track, still need to set back the local map
             self.neural_points.reset_local_map(self.dataset.cur_pose_torch[:3,3], None, self.dataset.processed_frame)

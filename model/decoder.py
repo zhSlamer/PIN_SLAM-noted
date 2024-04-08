@@ -93,7 +93,7 @@ class Decoder(nn.Module):
                     h = F.leaky_relu(l(h))
                 else:
                     h = F.relu(l(h))
-
+        # 最后输出层
         out = self.lout(h).squeeze(1)
         out *= self.sdf_scale
         # linear (feature_dim -> hidden_dim)
