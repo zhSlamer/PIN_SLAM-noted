@@ -13,6 +13,7 @@ from utils.config import Config
 from utils.mapper import Mapper
 from utils.tools import get_time, transform_torch
 
+# 使用神经网络生成的特征描述符描述环境
 class NeuralPointMapContextManager:
     def __init__(self, config: Config, mapper: Mapper):
         
@@ -306,6 +307,7 @@ class GTLoopManager:
             
         return None, None, None
 
+# 参数： dist_to_past 用于检测局部循环。它比较当前帧与过去帧之间的距离，以确定是否存在循环
 def detect_local_loop(dist_to_past, loop_candidate_mask, pgo_poses, cur_drift, cur_frame_id, loop_reg_failed_count=0, dist_thre=1.0, silence=False):
     min_dist = np.min(dist_to_past[loop_candidate_mask])
     min_index = np.where(dist_to_past == min_dist)[0]
@@ -329,7 +331,7 @@ def xy2theta(x, y):
         theta = 360 - ((180/np.pi) * np.arctan((-y)/x));
 
     return theta
-
+# 将二维点 (x, y) 转换为环形（ring）和扇区（sector）索引。这是为了将点云数据组织成扫描上下文（scan context）表示，这是一种用于循环检测的特征表示方法。
 def pt2rs(point, gap_ring, gap_sector, num_ring, num_sector):
     x = point[0]
     y = point[1]
@@ -383,7 +385,7 @@ def pt2rs_torch(point, gap_ring, gap_sector, num_ring, num_sector):
         idx_ring = num_ring-1 # python starts with 0 and ends with N-1
     
     return int(idx_ring), int(idx_sector)
-
+# 数将点云数据转换为扫描上下文（scan context）。它们分别使用NumPy和PyTorch实现。
 def ptcloud2sc(ptcloud, sc_shape, max_length):
     # pt_cloud in numpy
 

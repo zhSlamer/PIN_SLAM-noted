@@ -164,7 +164,9 @@ class SLAMDataset(Dataset):
         # ts_col represents the column id for timestamp
         self.cur_pose_ref = np.eye(4)
         self.cur_pose_torch = torch.tensor(self.cur_pose_ref, device=self.device, dtype=self.dtype)
-
+        # 读取强度信息
+        # pc_intensity = point_cloud2.read_points(msg, field_names=("intensity"), skip_nans=True)
+        # pc_data点云位置 + 强度; 时间信息
         pc_data = point_cloud2.read_points(msg, field_names=("x", "y", "z", ts_field_name), skip_nans=True)
 
         # convert the point cloud data to a numpy array
@@ -195,10 +197,11 @@ class SLAMDataset(Dataset):
         if self.config.deskew:
             self.get_point_ts(point_ts)
             
-
+    # 读文件形式
     def read_frame(self, frame_id):
         
         # load gt pose if available
+        # 每一帧的真值已知
         if self.gt_pose_provided:
             self.cur_pose_ref = self.poses_ref[frame_id]
             self.gt_poses.append(self.cur_pose_ref)
