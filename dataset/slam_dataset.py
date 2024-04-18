@@ -191,9 +191,11 @@ class SLAMDataset(Dataset):
         
         if point_ts is None:
             print("The point cloud message does not contain the time stamp field:", ts_field_name)
-
+        # numpy to torch point cloud, N*3
         self.cur_point_cloud_torch = torch.tensor(point_cloud, device=self.device, dtype=self.dtype)
 
+        # 如果点云没有时间戳，则根据物理偏移计算， 如MULRAN 64line 没有时间戳
+        # self.cur_point_ts_torch ； numpy to torch point_ts, N*1
         if self.config.deskew:
             self.get_point_ts(point_ts)
             
@@ -270,7 +272,7 @@ class SLAMDataset(Dataset):
     def preprocess_frame(self, frame_id=0):
 
         T1 = get_time()
-
+        # 自适应距离
         if self.config.adaptive_range_on:
             pc_max_bound, _ = torch.max(self.cur_point_cloud_torch[:, :3], dim=0)
             pc_min_bound, _ = torch.min(self.cur_point_cloud_torch[:, :3], dim=0)
@@ -284,6 +286,8 @@ class SLAMDataset(Dataset):
             crop_max_range = self.config.max_range
         
         # adaptive
+        # vox_down_m = max_range * 0.001 = 0.08用于建图和训练的体素尺寸
+        # source_vox_down_m = vox_down_m * 10 = 0.8 用于配准体素参数
         train_voxel_m = (crop_max_range/self.config.max_range) * self.config.vox_down_m
         source_voxel_m = (crop_max_range/self.config.max_range) * self.config.source_vox_down_m
 
@@ -293,10 +297,14 @@ class SLAMDataset(Dataset):
             kept_count = int(original_count*self.config.rand_down_r)
             idx = torch.randint(0, original_count, (kept_count,), device=self.device)
         else:
+            # 均匀降采样 得到行号
             idx = voxel_down_sample_torch(self.cur_point_cloud_torch[:,:3], train_voxel_m)
+        # 点云
         self.cur_point_cloud_torch = self.cur_point_cloud_torch[idx]
+        # 时间
         if self.cur_point_ts_torch is not None:
             self.cur_point_ts_torch = self.cur_point_ts_torch[idx]
+        # 语义
         if self.cur_sem_labels_torch is not None:
             self.cur_sem_labels_torch = self.cur_sem_labels_torch[idx]
             self.cur_sem_labels_full = self.cur_sem_labels_full[idx]
@@ -308,16 +316,18 @@ class SLAMDataset(Dataset):
             self.cur_point_cloud_torch, self.cur_sem_labels_torch = filter_sem_kitti(self.cur_point_cloud_torch, self.cur_sem_labels_torch, self.cur_sem_labels_full,
                                                                                      True, self.config.filter_moving_object) 
         else:
+            # 点云滤波 z轴 距离； 利用用pytorch bool索引返回 点云和时间
             self.cur_point_cloud_torch, self.cur_point_ts_torch = crop_frame(self.cur_point_cloud_torch, self.cur_point_ts_torch, 
                                                                              self.config.min_z, self.config.max_z, 
                                                                              self.config.min_range, crop_max_range)
-
+        # kitti需要对点云进行内参校正
         if self.config.kitti_correction_on:
             self.cur_point_cloud_torch = intrinsic_correct(self.cur_point_cloud_torch, self.config.correction_deg)
 
         T3 = get_time()
 
         # prepare for the registration
+        # 第0帧 
         if self.processed_frame == 0: # initialize the first frame, no tracking yet
             if self.config.track_on:
                 self.odom_poses.append(self.cur_pose_ref)
@@ -327,6 +337,7 @@ class SLAMDataset(Dataset):
                 self.last_odom_tran = inv(self.poses_ref[frame_id-1]) @ self.cur_pose_ref # T_last<-cur
             self.travel_dist.append(0.)
             self.last_pose_ref = self.cur_pose_ref
+        # 位姿初值
         elif self.processed_frame > 0: 
             # pose initial guess
             last_tran = np.linalg.norm(self.last_odom_tran[:3,3])
@@ -336,20 +347,25 @@ class SLAMDataset(Dataset):
             else: # static initial guess
                 cur_pose_init_guess = self.last_pose_ref
 
+            # 如果提供了真值信息，使用真值作为初值
             if not self.config.track_on and self.gt_pose_provided:
                 cur_pose_init_guess = self.poses_ref[frame_id]
             
             # pose initial guess tensor
+            # np to torch: pose_guess  self.cur_pose_guess_torch
             self.cur_pose_guess_torch = torch.tensor(cur_pose_init_guess, dtype=torch.float64, device=self.device)   
             cur_source_torch = self.cur_point_cloud_torch.clone() # used for registration
             
             # source point voxel downsampling (for registration)
+            # 配准点云降采样 voxel_down_m * 10, 
+            # 得到待配准点云 self.cur_source_points
             idx = voxel_down_sample_torch(cur_source_torch[:,:3], source_voxel_m)
             cur_source_torch = cur_source_torch[idx]
             self.cur_source_points = cur_source_torch[:,:3]
+            # 颜色 或 强度  self.cur_source_colors
             if self.config.color_on:
                 self.cur_source_colors = cur_source_torch[:,3:]
-            
+            # 时间 cur_source_ts
             if self.cur_point_ts_torch is not None:
                 cur_ts = self.cur_point_ts_torch.clone()
                 cur_source_ts = cur_ts[idx]
@@ -374,6 +390,7 @@ class SLAMDataset(Dataset):
             # else:
             #     self.cur_source_normals = None
 
+            # 待配准点云： 利用相对变换和插值 去除点云畸变 or 几何点云去畸变
             # deskewing (motion undistortion) for source point cloud
             if self.config.deskew and not self.lose_track:
                 self.cur_source_points = deskewing(self.cur_source_points, cur_source_ts, 
@@ -837,8 +854,13 @@ def apply_kitti_format_calib(poses: List[np.ndarray], calib_T_cl) -> List[np.nda
 # torch version
 def crop_frame(points: torch.tensor, ts: torch.tensor, 
                min_z_th=-3.0, max_z_th=100.0, min_range=2.75, max_range=100.0):
+    # 计算向量的范数 距离 前三个元素； dim 指定维度 dim=0 每一列  dim=1 每一行  
     dist = torch.norm(points[:,:3], dim=1)
+    # 布尔索引张量 选择满足条件的点 最小值 最大值 最小z 最大z； 存储值为布尔值
     filtered_idx = (dist > min_range) & (dist < max_range) & (points[:, 2] > min_z_th) & (points[:, 2] < max_z_th)
+    # 利用bool值选择满足条件的行 pytorch中允许使用bool 选择有效数据
+    # 将一个布尔张量作为索引传递给一个张量时，PyTorch会返回原始张量中对应索引为True的元素
+    # 从points张量中选择那些filtered_idx为True的行
     points = points[filtered_idx]
     if ts is not None:
         ts = ts[filtered_idx]
