@@ -201,25 +201,32 @@ class SLAMDataset(Dataset):
     def read_frame(self, frame_id):
         
         # load gt pose if available
-        # 每一帧的真值已知
+        # 每一帧的真值已知  位姿变量 self.cur_pose_ref
         if self.gt_pose_provided:
             self.cur_pose_ref = self.poses_ref[frame_id]
             self.gt_poses.append(self.cur_pose_ref)
         else: # or initialize with identity
             self.cur_pose_ref = np.eye(4)
+
+        # 位姿numpy 转为 torch
         self.cur_pose_torch = torch.tensor(self.cur_pose_ref, device=self.device, dtype=self.dtype)
 
+        # 每个点的时间偏移 单位s
         point_ts = None
 
+        # 加载点云，以读取文件形式加载，支持pcd, ply, kitti bin
         # load point cloud (support *pcd, *ply and kitti *bin format)
+        # join 合并 文件地址与文件名 根目录+文件名
         frame_filename = os.path.join(self.config.pc_path, self.pc_filenames[frame_id])
         if not self.silence:
             print(frame_filename)
+        # 位置 + 颜色
         if not self.config.semantic_on: 
             point_cloud, point_ts = read_point_cloud(frame_filename, self.config.color_channel) #  [N, 3], [N, 4] or [N, 6], may contain color or intensity 
             if self.config.color_channel > 0:
                 point_cloud[:,-self.config.color_channel:]/=self.color_scale
             self.cur_sem_labels_torch = None
+        # 语义
         else:
             label_filename = os.path.join(self.config.label_path, self.pc_filenames[frame_id].replace('bin','label'))
             point_cloud, sem_labels, sem_labels_reduced = read_semantic_point_label(frame_filename, label_filename) # [N, 4] , [N], [N]
@@ -670,6 +677,7 @@ def read_point_cloud(filename: str, color_channel: int = 0, bin_channel_count: i
         elif 'intensity' in keys and color_channel == 1:           
             intensity = pc_load['intensity'] # if they are available
             # print(intensity)
+            # xyz + 强度信息
             points = np.hstack((points, intensity))
     elif ".pcd" in filename: # currently cannot be readed by o3d.t.io
         pc_load = o3d.io.read_point_cloud(filename)
