@@ -160,8 +160,8 @@ class PINSLAMer:
         T1 = get_time()
         # 体素降采样得到建图点云和配准点云 ; 离群点剔除 ； 位姿初值 ； 待配准点云运动去畸变
         # self.cur_point_cloud_torch  self.cur_point_ts_torch 
-        # self.cur_pose_guess_torch
-        # self.cur_source_points
+        # self.cur_pose_guess_torch 
+        # self.cur_source_points 
         self.dataset.preprocess_frame() 
 
         T2 = get_time()

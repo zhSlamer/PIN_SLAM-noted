@@ -654,7 +654,7 @@ class SLAMDataset(Dataset):
             print("Output merged point cloud map")
             o3d.t.io.write_point_cloud(os.path.join(run_path, "map", "merged_point_cloud.ply"), map_out_o3d)
 
-
+# 表明函数返回值是np多维数组
 def read_point_cloud(filename: str, color_channel: int = 0, bin_channel_count: int = 4) -> np.ndarray:
 
     # read point cloud from either (*.ply, *.pcd, *.las) or (kitti *.bin) format
