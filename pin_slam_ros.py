@@ -162,6 +162,7 @@ class PINSLAMer:
         # self.cur_point_cloud_torch  self.cur_point_ts_torch 
         # self.cur_pose_guess_torch 
         # self.cur_source_points 
+        # 法向量： cur_source_normals  [N, 3]
         self.dataset.preprocess_frame() 
 
         T2 = get_time()

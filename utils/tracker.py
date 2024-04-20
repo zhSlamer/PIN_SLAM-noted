@@ -48,24 +48,24 @@ class Tracker():
 
         cov_mat = None
 
-        min_grad_norm = self.config.reg_min_grad_norm # should be smaller than 1
-        max_grad_norm = self.config.reg_max_grad_norm # should be larger than 1
+        min_grad_norm = self.config.reg_min_grad_norm # should be smaller than 1  0.5 
+        max_grad_norm = self.config.reg_max_grad_norm # should be larger than 1   2.0
         if self.config.reg_GM_dist_m > 0:
-            cur_GM_dist_m = self.config.reg_GM_dist_m
+            cur_GM_dist_m = self.config.reg_GM_dist_m   # 0.5
         else:
             cur_GM_dist_m = None
         if self.config.reg_GM_grad > 0:
-            cur_GM_grad = self.config.reg_GM_grad 
+            cur_GM_grad = self.config.reg_GM_grad       # 0.2 # 0.1 the smaller the value, the smaller the weight would be (give even smaller weight to the outliers)
         else:
             cur_GM_grad = None
-        lm_lambda = self.config.reg_lm_lambda
-        iter_n = self.config.reg_iter_n
-        term_thre_deg = self.config.reg_term_thre_deg
-        term_thre_m = self.config.reg_term_thre_m
+        lm_lambda = self.config.reg_lm_lambda           # 1e-4
+        iter_n = self.config.reg_iter_n                 # iter n 20
+        term_thre_deg = self.config.reg_term_thre_deg   # 0.01
+        term_thre_m = self.config.reg_term_thre_m       # 0.005
         
-        max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.5 * 100.0
+        max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.5 * 100.0  # 最大合理的SDF残差值,cm vox_down_m*3.0
         min_valid_ratio = 0.2
-        if loop_reg: # also can try to further decrease the source point cloud resolution
+        if loop_reg: # also can try to further decrease the source point cloud resolution   # 减小配准点云的分辨率
             max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.6 * 100.0
             min_valid_ratio = 0.15
 
