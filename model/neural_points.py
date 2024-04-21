@@ -51,7 +51,7 @@ class NeuralPoints(nn.Module):
         self.buffer_size = config.buffer_size  # hash 储存点的数量
 
         self.temporal_local_map_on = True
-        self.local_map_radius = self.config.local_map_radius
+        self.local_map_radius = self.config.local_map_radius        # 局部地图半径 50m
         self.diff_travel_dist_local = self.config.local_map_radius * self.config.local_map_travel_dist_ratio 
         
         self.diff_ts_local = self.config.diff_ts_local # not used now, switch to travel distance
@@ -73,7 +73,7 @@ class NeuralPoints(nn.Module):
         self.buffer_pt_index = torch.full((self.buffer_size,), -1, dtype=self.idx_dtype, device=self.device)
         
         # TODO: add the second level for recording known and unknown space
-        # 神经点位置 x世界系W
+        # 神经点位置 x世界系W [N, 3]
         self.neural_points = torch.empty((0, 3), dtype=self.dtype, device=self.device)
         # 神经点代表自身坐标系方向的四元数
         self.point_orientations = torch.empty((0, 4), dtype=self.dtype, device=self.device) # as quaternion
@@ -283,22 +283,24 @@ class NeuralPoints(nn.Module):
         self.cur_ts = cur_ts
         self.max_ts = max(self.max_ts, cur_ts)
         
-        vec2sensor = self.neural_points-sensor_position
-        dist2sensor = torch.sum(vec2sensor**2, dim=-1) # dist square
+        vec2sensor = self.neural_points-sensor_position                 # 计算局部地图中所有点到传感器位置的向量
+        dist2sensor = torch.sum(vec2sensor**2, dim=-1)                  # dist square 计算每个点到传感器的平方距离 dim=-1，张量中最后一个维度
         
         if self.config.use_mid_ts:
             point_ts_used = ((self.point_ts_create + self.point_ts_update) / 2).long() # still as dtype long
         else:
-            point_ts_used = self.point_ts_create
+            point_ts_used = self.point_ts_create                        # 每个神经点的创建时间
 
         if use_travel_dist:
             delta_travel_dist = torch.abs(self.travel_dist[cur_ts] - self.travel_dist[point_ts_used])
             local_mask = (dist2sensor < self.local_map_radius**2) & (delta_travel_dist < self.diff_travel_dist_local)
         else: # use delta_t
             delta_t = torch.abs(cur_ts - point_ts_used)
+            # bool 使用局部地图半径内的神经点 & 时间为100帧以内的神经点 loop_local_map_time_window
             local_mask = (dist2sensor < self.local_map_radius**2) & (delta_t < diff_ts_local)
 
-        self.local_neural_points = self.neural_points[local_mask]
+        # 即本质上是根据当前位置，使用bool掩码筛选出半径以及时间内的局部神经点地图
+        self.local_neural_points = self.neural_points[local_mask]   # 根据bool掩码，更新局部神经点
         self.local_point_orientations = self.point_orientations[local_mask]
         self.local_point_certainties = self.point_certainties[local_mask]
         self.local_point_ts_update = self.point_ts_update[local_mask]
@@ -306,12 +308,19 @@ class NeuralPoints(nn.Module):
         local_mask = torch.cat((local_mask, torch.tensor([True], device=self.device))) # padding with one element in the end
         self.local_mask = local_mask
         
+        # 创建一个映射，该映射能够在任何时间点快速地从全局点索引找到对应的局部点索引，或者识别某个全局点是否不在当前的局部地图中（通过-1索引实现）
+        # 初始化一个与 local_mask 形状相同的张量，所有值设为-1，表示全局到局部的映射 -1在这里用作一个标记，表示那些在局部地图中不存在（即local_mask为False）的全局点
         global2local = torch.full_like(local_mask, -1).long() # if Flase (not in the local map), the mapping get an idx as -1
+        # 找到局部掩码中为True的索引，使用flatten将这些索引展平成一维张量，索引代表了局部地图中在全局地图存在的点
         local_indices = torch.nonzero(local_mask).flatten()
+        # 计算局部点的数量
         local_point_count = local_indices.size(0)
-        global2local[local_indices] = torch.arange(local_point_count, device=self.device)
+        # 为局部点的全局索引分配一个从0开始的连续局部索引，torch.arange生成一个从0到local_point_count - 1的序列
+        # 这个序列赋值给global2local中对应局部点的索引
+        global2local[local_indices] = torch.arange(local_point_count, device=self.device)   
+        # 确保最后一个元素保持为-1，表示无效索引
         global2local[-1] = -1 # invalid idx is still invalid after mapping
-
+        # 更新类的全局到局部的映射
         self.global2local = global2local 
         
         self.local_geo_features = nn.Parameter(self.geo_features[local_mask])

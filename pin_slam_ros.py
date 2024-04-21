@@ -401,13 +401,18 @@ class PINSLAMer:
     def detect_correct_loop(self):
 
         cur_frame_id = self.dataset.processed_frame
+        # 全局回环检测 -- 每一帧 存储局部神经地图sc描述子
         if self.config.global_loop_on:
+            # 局部地图神经点sc描述 10帧后运行
             if self.config.local_map_context and cur_frame_id >= self.config.local_map_context_latency: # local map context
                 cur_frame = cur_frame_id-self.config.local_map_context_latency
                 cur_pose = torch.tensor(self.dataset.pgo_poses[cur_frame], device=self.config.device, dtype=torch.float64)
+                # 重置局部神经点地图，使用当前帧的位置  local_neural_points loop_local_map_time_window 100
                 self.neural_points.reset_local_map(cur_pose[:3,3], None, cur_frame, False, self.config.loop_local_map_time_window) 
+                # 将当前的世界系神经点变换到当前位姿，即当前帧局部地图神经点
                 context_pc_local = transform_torch(self.neural_points.local_neural_points.detach(), torch.linalg.inv(cur_pose)) # transformed back into the local frame
                 neural_points_feature = self.neural_points.local_geo_features[:-1].detach() if self.config.loop_with_feature else None
+                # 将当前帧局部神经点转为sc环扇二维矩阵z_max contexts，rk环形向量 ringkeys ; contexts_feature ringkeys_feature
                 self.lcd_npmc.add_node(cur_frame, context_pc_local, neural_points_feature)
             else: # first frame not yet have local map, use scan context
                 self.lcd_npmc.add_node(0, self.dataset.cur_point_cloud_torch)
@@ -422,15 +427,20 @@ class PINSLAMer:
             if self.config.pgo_with_pose_prior: # add pose prior
                 self.pgm.add_pose_prior(cur_frame_id, self.dataset.pgo_poses[cur_frame_id])
 
+            # LOOP后间隔20帧再检测回环
             if cur_frame_id - self.pgm.last_loop_idx > self.config.pgo_freq and not self.dataset.stop_status:
+                # 形成高维np矩阵， [num, 4, 4]
                 cur_pgo_poses = np.stack(self.dataset.pgo_poses)
+                # 所有位姿相对于当前位姿的距离
                 dist_to_past = np.linalg.norm(cur_pgo_poses[:,:3,3] - cur_pgo_poses[-1,:3,3], axis=1)
-                loop_candidate_mask = (self.dataset.travel_dist[-1] - self.dataset.travel_dist > self.config.min_loop_travel_dist_ratio*self.config.local_map_radius)
+                # self.dataset.travel_dist 列表 索引为帧号 当前点 4*50m距离后的帧为候选帧
+                loop_candidate_mask = (self.dataset.travel_dist[-1] - self.dataset.travel_dist > self.config.min_loop_travel_dist_ratio*self.config.local_map_radius)  # 4.0 * 50 局部地图 大于200m的帧，列为候选帧
                 loop_id = None
                 local_map_context_loop = False
                 if loop_candidate_mask.any(): # have at least one candidate
                     # firstly try to detect the local loop
                     loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0, silence=self.config.silence)
+                    # 如果距离回环检测没有候选，使用sc回环
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(cur_pgo_poses, self.dataset.pgo_poses, self.pgm.drift_radius*3.0, loop_candidate_mask, self.neural_points)
 
