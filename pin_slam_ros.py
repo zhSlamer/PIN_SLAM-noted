@@ -415,7 +415,8 @@ class PINSLAMer:
         self.pgm.add_frame_node(cur_frame_id, self.dataset.pgo_poses[cur_frame_id]) # add new node and pose initial guess
         self.pgm.init_poses = self.dataset.pgo_poses
 
-        if cur_frame_id > 0:     
+        if cur_frame_id > 0:
+            # 两个节点之间加入相对变换因子     
             self.pgm.add_odometry_factor(cur_frame_id, cur_frame_id-1, self.dataset.last_odom_tran) # T_p<-c
             self.pgm.estimate_drift(self.dataset.travel_dist, cur_frame_id) # estimate the current drift
             if self.config.pgo_with_pose_prior: # add pose prior
