@@ -442,6 +442,7 @@ class PINSLAMer:
                     loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0, silence=self.config.silence)
                     # 如果距离回环检测没有候选，使用sc回环
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
+                        # 检测全局回环 
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(cur_pgo_poses, self.dataset.pgo_poses, self.pgm.drift_radius*3.0, loop_candidate_mask, self.neural_points)
 
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
@@ -460,7 +461,7 @@ class PINSLAMer:
                         loop_transform = np.linalg.inv(self.dataset.pgo_poses[loop_id]) @ pose_refine_np # T_l<-c = T_l<-w @ T_w<-c
                         if not self.config.silence:
                             print("[bold green]Refine loop transformation succeed [/bold green]")
-                        # only conduct pgo when the loop and loop constraint is correct
+                        # only conduct pgo when the loop and loop constraint is correct 加入回环边因子
                         self.pgm.add_loop_factor(cur_frame_id, loop_id, loop_transform)
                         self.pgm.optimize_pose_graph() # conduct pgo
                         cur_loop_vis_id = cur_frame_id-self.config.local_map_context_latency if local_map_context_loop else cur_frame_id

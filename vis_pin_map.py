@@ -17,6 +17,9 @@ from utils.visualizer import MapVisualizer
 from model.neural_points import NeuralPoints
 from model.decoder import Decoder
 
+"""
+猜测：即将当前帧提取出scan context，利用detect在全局sc库中查找，找到相似帧，需要以相似帧的位姿为中心，建立待配准的神经点地图
+"""
 
 '''
     load the pin-map and do the reconstruction 
@@ -50,7 +53,8 @@ def vis_pin_map():
     # initialize the feature octree
     neural_points = NeuralPoints(config)
 
-    # Load the map
+    # Load the map 加载神经点地图 模型方式加载
+    # PyTorch会从文件中读取这个字典，并将其中的参数重新赋值给模型的相应属性
     loaded_model = torch.load(config.model_path)
     neural_points = loaded_model["neural_points"]
 

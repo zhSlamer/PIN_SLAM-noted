@@ -190,7 +190,7 @@ class NeuralPointMapContextManager:
                 query_context = self.query_contexts[query_idx]
                 query_ringkey = sc2rk(query_context)
                 diff_to_history = query_ringkey - ringkey_history # brute force nn 
-                dist_to_history = torch.norm(diff_to_history, p=1, dim=1) # l1 norm
+                dist_to_history = torch.norm(diff_to_history, p=1, dim=1) # l1 norm  计算当前帧sc和历史帧sc之间的差异， 差异最小的那一帧，为可能回环的帧，获取那一帧的编号，得到该帧位姿
 
             min_idx = torch.argmin(dist_to_history)
             cur_min_idx_in_candidates = candidate_idx[min_idx].item()
