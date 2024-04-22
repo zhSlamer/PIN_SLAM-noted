@@ -309,8 +309,11 @@ class GTLoopManager:
 
 # 参数： dist_to_past 用于检测局部循环。它比较当前帧与过去帧之间的距离，以确定是否存在循环
 def detect_local_loop(dist_to_past, loop_candidate_mask, pgo_poses, cur_drift, cur_frame_id, loop_reg_failed_count=0, dist_thre=1.0, silence=False):
+    # 取可能回环帧中的最小距离
     min_dist = np.min(dist_to_past[loop_candidate_mask])
+    # 最小距离对应的帧索引
     min_index = np.where(dist_to_past == min_dist)[0]
+    # 最小距离阈值 0.4 voxel_size_m * 5.0 , 考虑漂移距离，失败回环配准小于3， 即距离回环
     if min_dist < dist_thre and cur_drift < dist_thre*2 and loop_reg_failed_count < 3: # local loop
         loop_id, loop_dist = min_index[0], min_dist # a candidate found
         loop_transform = np.linalg.inv(pgo_poses[loop_id]) @ pgo_poses[-1] 
