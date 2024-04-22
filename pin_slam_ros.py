@@ -438,7 +438,7 @@ class PINSLAMer:
                 loop_id = None
                 local_map_context_loop = False
                 if loop_candidate_mask.any(): # have at least one candidate
-                    # firstly try to detect the local loop
+                    # firstly try to detect the local loop 取最近距离的回环帧，以该帧为中心建立局部神经地图
                     loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0, silence=self.config.silence)
                     # 如果距离回环检测没有候选，使用sc回环
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
