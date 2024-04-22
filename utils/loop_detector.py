@@ -131,9 +131,11 @@ class NeuralPointMapContextManager:
 
     # main function for global loop detection
     def detect_global_loop(self, cur_pgo_poses, pgo_poses, dist_thre, loop_candidate_mask, neural_points): 
-
+        # 与历史位姿的相对距离， 满足drift_radius*3.0
         dist_to_past = np.linalg.norm(cur_pgo_poses[:,:3,3] - cur_pgo_poses[self.curr_node_idx,:3,3], axis=1)
         dist_search_mask = dist_to_past < dist_thre
+        # 获得全局候选帧索引， loop_candidate_mask：剔除了最近时刻帧 dist_search_mask 在漂移范围内的候选帧
+        # 当前帧的位姿需要粗略估计
         global_loop_candidate_idx = np.where(loop_candidate_mask & dist_search_mask)[0]
         if global_loop_candidate_idx.shape[0] > 0: # candidate exist
             context_pc = neural_points.local_neural_points.detach() # augment virtual poses
