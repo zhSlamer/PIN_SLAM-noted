@@ -476,7 +476,7 @@ class Mapper():
                     color_pred = torch.sum(color_pred * weight_knn, dim=1) # N, C    
 
             surface_mask = (torch.abs(sdf_label) < self.config.surface_sample_range_m)  # weight > 0
-
+            # 梯度计算， 计算每个点的梯度，即法向量
             if self.require_gradient:
                 g = get_gradient(coord, sdf_pred) # to unit m  
             elif self.config.numerical_grad: # do not use this for the tracking, still analytical grad for tracking   
@@ -497,7 +497,9 @@ class Mapper():
                 sdf_label = sdf_label * cos
 
             if self.config.consistency_loss_on: # [not used]
+                # 生成一个随机索引数组 min(...)函数确保生成的索引数量不会超过coord中的元素总数。
                 near_index = torch.randint(0, coord.shape[0], (min(self.config.consistency_count,coord.shape[0]),), device=self.device)
+                # (-5,5)随机偏移
                 random_shift = torch.rand_like(coord) * 2 * self.config.consistency_range - self.config.consistency_range # 10 cm
                 coord_near = coord + random_shift 
                 coord_near = coord_near[near_index, :] # only use a part of these coord to speed up
@@ -506,6 +508,7 @@ class Mapper():
                 pred_near = self.geo_mlp.sdf(geo_feature_near)
                 if not self.config.weighted_first:
                     pred_near = torch.sum(pred_near * weight_knn, dim=1).squeeze(1) # N
+                # 加入SDF剔除， 可能边缘处SDF过大
                 g_near = get_gradient(coord_near, pred_near)
 
             # calculate the loss            

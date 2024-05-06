@@ -138,6 +138,7 @@ class NeuralPointMapContextManager:
         # 当前帧的位姿需要粗略估计
         global_loop_candidate_idx = np.where(loop_candidate_mask & dist_search_mask)[0]
         if global_loop_candidate_idx.shape[0] > 0: # candidate exist
+            # 当前帧局部地图神经点
             context_pc = neural_points.local_neural_points.detach() # augment virtual poses
             cur_pose = torch.tensor(pgo_poses[self.curr_node_idx], device=self.device, dtype=torch.float64)            
             last_pose = torch.tensor(pgo_poses[self.curr_node_idx-1], device=self.device, dtype=torch.float64) if self.curr_node_idx > 0 else None
